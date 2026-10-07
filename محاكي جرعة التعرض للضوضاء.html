@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>محاكي جرعة التعرض للضوضاء</title>
+<style>
+:root{
+  --navy:#1F3864;--gold:#B08D57;--bg:#F7F5F1;--card:#FFFFFF;--text:#1d2430;
+  --muted:#6b7280;--border:#E3E0D8;--green:#2E7D32;--red:#C62828;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){--bg:#15181f;--card:#1d2129;--text:#eceef1;--muted:#9aa3af;--border:#333945;}
+}
+:root[data-theme="dark"]{--bg:#15181f;--card:#1d2129;--text:#eceef1;--muted:#9aa3af;--border:#333945;}
+*{box-sizing:border-box;}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:"Segoe UI",Tahoma,Arial,sans-serif;}
+.app{max-width:760px;margin:0 auto;padding:18px 16px 50px;}
+header{text-align:center;margin-bottom:12px;}
+header h1{color:var(--navy);font-size:1.3rem;margin:0 0 4px;}
+header p{color:var(--gold);font-weight:600;margin:0;font-size:.9rem;}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:16px;}
+h2.sec{color:var(--navy);font-size:1.05rem;margin:0 0 12px;}
+.gaugeWrap{text-align:center;}
+.gaugeNum{font-size:1.7rem;font-weight:800;color:var(--navy);margin-top:-18px;}
+.gaugeLbl{font-size:.8rem;color:var(--muted);margin-bottom:8px;}
+.verdict{text-align:center;font-weight:700;padding:8px;border-radius:8px;margin-top:6px;font-size:.88rem;}
+.verdict.ok{background:#EAF4EA;color:var(--green);}
+.verdict.bad{background:#FCE4E4;color:var(--red);}
+.period{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center;margin-bottom:10px;}
+.period label{font-size:.75rem;color:var(--muted);display:block;margin-bottom:3px;}
+.period input[type=range]{width:100%;accent-color:var(--navy);}
+.period .val{font-size:.8rem;font-weight:700;color:var(--navy);}
+.rm{background:none;border:none;color:var(--red);font-size:1.1rem;cursor:pointer;}
+.add{background:var(--navy);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:.82rem;cursor:pointer;margin-top:4px;}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
+select,input[type=number]{width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:.88rem;}
+.thermos{display:flex;justify-content:center;gap:50px;margin:16px 0 6px;}
+.thermo{text-align:center;}
+.tube{width:34px;height:140px;background:var(--border);border-radius:17px;position:relative;overflow:hidden;margin:0 auto 8px;}
+.fill{position:absolute;bottom:0;left:0;width:100%;border-radius:0 0 17px 17px;transition:height .3s;}
+.fill.b{background:var(--red);}
+.fill.a{background:var(--green);}
+.tlabel{font-size:.78rem;color:var(--muted);}
+.tval{font-weight:800;color:var(--navy);}
+.note{background:var(--bg);border:1px dashed var(--border);border-radius:10px;padding:12px;margin-top:6px;font-size:.8rem;color:var(--muted);}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>🔊 محاكي جرعة التعرض للضوضاء</h1>
+    <p>Noise Dose Simulator — وفق 29 CFR 1910.95</p>
+  </header>
+
+  <div class="card">
+    <h2 class="sec">⏱️ فترات التعرض خلال نوبة العمل</h2>
+    <div id="periods"></div>
+    <button class="add" onclick="addPeriod()">+ إضافة فترة تعرض</button>
+
+    <div class="gaugeWrap">
+      <svg viewBox="0 0 200 115" width="260">
+        <defs>
+          <linearGradient id="g" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#2E7D32"/>
+            <stop offset="55%" stop-color="#E8B339"/>
+            <stop offset="100%" stop-color="#C62828"/>
+          </linearGradient>
+        </defs>
+        <path d="M10,100 A90,90 0 0,1 190,100" stroke="url(#g)" stroke-width="16" fill="none" stroke-linecap="round"/>
+        <g id="needleG" style="transform-origin:100px 100px; transform:rotate(-90deg); transition:transform .4s;">
+          <line x1="100" y1="100" x2="100" y2="22" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+        </g>
+        <circle cx="100" cy="100" r="7" fill="currentColor"/>
+      </svg>
+      <div class="gaugeNum" id="doseNum">0.00</div>
+      <div class="gaugeLbl">معامل التعرض التراكمي (Noise Dose)</div>
+      <div class="verdict" id="doseVerdict"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 class="sec">🎧 فعالية واقي السمع المستخدم</h2>
+    <div class="row2">
+      <div>
+        <label style="font-size:.8rem;color:var(--muted);">نوع الواقي</label>
+        <select id="protType" onchange="syncNRR()">
+          <option value="25">أغطية الأذن (Ear Muffs) — NRR 25</option>
+          <option value="29">سدادات الأذن (Ear Plugs) — NRR 29</option>
+          <option value="23">سدادات مع قناة (Canal Caps) — NRR 23</option>
+          <option value="custom">قيمة مخصصة</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:.8rem;color:var(--muted);">قيمة NRR</label>
+        <input type="number" id="nrrVal" value="25" oninput="calcProtection()">
+      </div>
+    </div>
+    <label style="font-size:.8rem;color:var(--muted);">مستوى الضوضاء المقاس بالموقع (dB)</label>
+    <input type="number" id="siteNoise" value="100" oninput="calcProtection()">
+
+    <div class="thermos">
+      <div class="thermo"><div class="tube"><div class="fill b" id="fillBefore"></div></div><div class="tlabel">قبل الحماية</div><div class="tval" id="beforeVal">100 dB</div></div>
+      <div class="thermo"><div class="tube"><div class="fill a" id="fillAfter"></div></div><div class="tlabel">بعد الحماية (مع معامل أمان 7)</div><div class="tval" id="afterVal">82 dB</div></div>
+    </div>
+    <div class="verdict" id="protVerdict"></div>
+    <div class="note">المعادلة: الضوضاء الفعلية = مستوى الضوضاء بالموقع − (NRR − 7). الطرح الثابت (7) معامل أمان تشترطه الأوشا قبل تطبيق قيمة تقليل الضوضاء.</div>
+  </div>
+</div>
+
+<script>
+let periods = [];
+function addPeriod(){
+  if(periods.length>=3) return;
+  periods.push({hours:4, db:90});
+  renderPeriods();
+}
+function removePeriod(i){ periods.splice(i,1); renderPeriods(); }
+function renderPeriods(){
+  const el = document.getElementById('periods');
+  el.innerHTML = periods.map((p,i)=>`
+    <div class="period">
+      <div><label>مدة التعرض: <span class="val">${p.hours} ساعة</span></label>
+        <input type="range" min="0.25" max="8" step="0.25" value="${p.hours}" oninput="periods[${i}].hours=+this.value;this.previousElementSibling.querySelector('.val').textContent=this.value+' ساعة';calcDose();"></div>
+      <div><label>مستوى الضوضاء: <span class="val">${p.db} dB</span></label>
+        <input type="range" min="80" max="120" step="1" value="${p.db}" oninput="periods[${i}].db=+this.value;this.previousElementSibling.querySelector('.val').textContent=this.value+' dB';calcDose();"></div>
+      <button class="rm" onclick="removePeriod(${i})">✕</button>
+    </div>`).join('');
+  calcDose();
+}
+function allowedHours(db){ return 8 / Math.pow(2, (db-90)/5); }
+function calcDose(){
+  let dose = 0;
+  periods.forEach(p=> dose += p.hours / allowedHours(p.db));
+  document.getElementById('doseNum').textContent = dose.toFixed(2);
+  const clamped = Math.min(Math.max(dose,0),2);
+  const angle = (clamped/2)*180 - 90;
+  document.getElementById('needleG').style.transform = `rotate(${angle}deg)`;
+  const v = document.getElementById('doseVerdict');
+  if(periods.length===0){ v.textContent=''; v.className='verdict'; return; }
+  if(dose <= 1){
+    v.className='verdict ok'; v.textContent = '✅ ضمن الحد المسموح — لا يتجاوز معامل التعرض 1.0';
+  } else {
+    v.className='verdict bad'; v.textContent = '⚠️ تجاوز الحد المسموح — يلزم تدخل هندسي أو إداري أو وقاية شخصية فورية';
+  }
+}
+addPeriod(); addPeriod();
+
+function syncNRR(){
+  const sel = document.getElementById('protType').value;
+  if(sel!=='custom') document.getElementById('nrrVal').value = sel;
+  calcProtection();
+}
+function calcProtection(){
+  const nrr = parseFloat(document.getElementById('nrrVal').value) || 0;
+  const noise = parseFloat(document.getElementById('siteNoise').value) || 0;
+  const effective = noise - Math.max(nrr-7, 0);
+  const pct = v => Math.min(Math.max((v-60)/(120-60)*100,0),100);
+  document.getElementById('fillBefore').style.height = pct(noise)+'%';
+  document.getElementById('fillAfter').style.height = pct(effective)+'%';
+  document.getElementById('beforeVal').textContent = noise + ' dB';
+  document.getElementById('afterVal').textContent = effective.toFixed(0) + ' dB';
+  const v = document.getElementById('protVerdict');
+  if(effective <= 90){
+    v.className='verdict ok'; v.textContent = '✅ الواقي كافٍ — المستوى الفعلي بعد الحماية أقل من 90 dB';
+  } else {
+    v.className='verdict bad'; v.textContent = '⚠️ غير كافٍ — يلزم واقٍ بمعدل NRR أعلى أو دمج أكثر من وسيلة حماية';
+  }
+}
+calcProtection();
+</script>
+</body>
+</html>
